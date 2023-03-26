@@ -25,7 +25,13 @@ RUN curl -L https://foundry.paradigm.xyz | bash
 RUN ~/.foundry/bin/foundryup
 
 # Add solhint
-RUN npm install -g solhint
+# RUN npm install -g solhint
 
-# Add slither
-RUN pip3 install slither-analyzer
+# 
+# Install all and select the latest version of solc as the default
+# SOLC_VERSION is defined to a valid version to avoid a warning message on the output
+RUN pip3 --no-cache-dir install solc-select
+RUN solc-select install all && SOLC_VERSION=0.8.0 solc-select versions | head -n1 | xargs solc-select use
+
+RUN pip3 --no-cache-dir install slither-analyzer pyevmasm
+RUN pip3 --no-cache-dir install --upgrade manticore
