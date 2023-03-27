@@ -26,6 +26,10 @@
     "lint": "pnpm lint:sol && pnpm prettier:check",
     "lint:sol": "forge fmt --check && pnpm solhint \"{script,src,test}/**/*.sol\"",
     "prettier:check": "prettier --check \"**/*.{json,md,yml}\"",
-    "prettier:write": "prettier --write \"**/*.{json,md,yml}\""
+    "prettier:write": "prettier --write \"**/*.{json,md,yml}\"",
+    "gen:flatten": "mkdir -p assets && forge flatten src/ERC4973.sol > ./assets/ERC4973-flat.sol"
+  },
+  "dependencies": {
+    "ethers": "^6.2.2"
   }
 }
