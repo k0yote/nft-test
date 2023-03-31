@@ -2,10 +2,13 @@
 pragma solidity ^0.8.8;
 
 import { ERC721 } from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import { ERC721URIStorage } from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import { ERC721URIStorage, Strings } from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import { IERC6147 } from "./interfaces/IERC6147.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
-abstract contract ERC6147 is ERC721, ERC721URIStorage, IERC6147 {
+abstract contract ERC6147 is ERC721, ERC721URIStorage, IERC6147, Ownable {
+    using Strings for uint256;
+
     /// @dev A structure representing a token of guard address and expires
     /// @param guard address of guard role
     /// @param expirs UNIX timestamp, the guard could manage the token before expires
@@ -14,7 +17,29 @@ abstract contract ERC6147 is ERC721, ERC721URIStorage, IERC6147 {
         uint64 expires;
     }
 
+    string private baseURI;
+    bool private expireSwitch;
+
     mapping(uint256 => GuardInfo) internal _guardInfo;
+
+    constructor(string memory name, string memory symbol) ERC721(name, symbol) { }
+
+    function mint(address to, uint256 tokenId) public onlyOwner {
+        _mint(to, tokenId);
+        changeGuard(tokenId, _msgSender(), 0);
+    }
+
+    function mint(address[] calldata toList, uint256[] calldata tokenIdList) external {
+        require(toList.length == tokenIdList.length, "input length must be same");
+
+        for (uint256 i = 0; i < tokenIdList.length; i++) {
+            mint(toList[i], tokenIdList[i]);
+        }
+    }
+
+    function mintFor(address to, uint256 tokenId) external {
+        mint(to, tokenId);
+    }
 
     /// @notice Owner, authorised operators and approved address of the NFT can set guard and expires of the NFT and
     ///         valid guard can modifiy guard and expires of the NFT
@@ -27,7 +52,7 @@ abstract contract ERC6147 is ERC721, ERC721URIStorage, IERC6147 {
     /// @param newGuard The new guard address of the NFT
     /// @param expires UNIX timestamp, the guard could manage the token before expires
     function changeGuard(uint256 tokenId, address newGuard, uint64 expires) public virtual {
-        require(expires > block.timestamp, "ERC6147: invalid expires");
+        require(!expireSwitch || expires > block.timestamp, "ERC6147: invalid expires");
         _updateGuard(tokenId, newGuard, expires, false);
     }
 
@@ -57,7 +82,7 @@ abstract contract ERC6147 is ERC721, ERC721URIStorage, IERC6147 {
     /// @param tokenId The NFT to get the guard address and expires for
     /// @return The guard address and expires for the NFT
     function guardInfo(uint256 tokenId) public view virtual returns (address, uint64) {
-        if (_guardInfo[tokenId].expires >= block.timestamp) {
+        if (!expireSwitch || _guardInfo[tokenId].expires >= block.timestamp) {
             return (_guardInfo[tokenId].guard, _guardInfo[tokenId].expires);
         } else {
             return (address(0), 0);
@@ -142,11 +167,23 @@ abstract contract ERC6147 is ERC721, ERC721URIStorage, IERC6147 {
     }
 
     function tokenURI(uint256 tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
-        return super.tokenURI(tokenId);
+        require(_exists(tokenId), "ERC721Metadata: URI query for nonexistent token");
+        return string(abi.encodePacked(_baseURI(), tokenId.toString(), ".json"));
     }
 
     /// @dev See {IERC165-supportsInterface}.
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
         return interfaceId == type(IERC6147).interfaceId || super.supportsInterface(interfaceId);
+    }
+
+    function setExpireSwitchOn() public onlyOwner {
+        expireSwitch = true;
+    }
+
+    function _baseURI() internal view override returns (string memory) {
+        if (bytes(baseURI).length > 0) {
+            return baseURI;
+        }
+        return string(abi.encodePacked("https://example/metadata/", symbol(), "/"));
     }
 }

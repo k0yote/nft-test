@@ -3,20 +3,23 @@ pragma solidity ^0.8.8;
 
 import { SignatureChecker } from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
-import { ERC721 } from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import { ERC721, Strings } from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import { ERC721URIStorage } from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import { BitMaps } from "@openzeppelin/contracts/utils/structs/BitMaps.sol";
 import { IERC4973 } from "./interfaces/IERC4973.sol";
-import { IERC4906, IERC165 } from "./interfaces/IERC4906.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
 bytes32 constant AGREEMENT_HASH = keccak256("Agreement(address active,address passive,bytes metadata)");
 
 /// @notice Reference implementation of EIP-4973 tokens.
 /// @author Tim Daubenschütz, Rahul Rumalla (https://github.com/rugpullindex/ERC4973/blob/master/src/ERC4973.sol)
-abstract contract ERC4973 is EIP712, ERC721, ERC721URIStorage, IERC4973, IERC4906 {
+abstract contract ERC4973 is EIP712, ERC721, ERC721URIStorage, IERC4973, Ownable {
     using BitMaps for BitMaps.BitMap;
+    using Strings for uint256;
 
     BitMaps.BitMap private _usedHashes;
+
+    string private baseURI;
 
     constructor(
         string memory name,
@@ -32,16 +35,16 @@ abstract contract ERC4973 is EIP712, ERC721, ERC721URIStorage, IERC4973, IERC490
     }
 
     function tokenURI(uint256 tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
-        return super.tokenURI(tokenId);
+        require(_exists(tokenId), "ERC721Metadata: URI query for nonexistent token");
+        return string(abi.encodePacked(_baseURI(), tokenId.toString(), ".json"));
     }
 
     function decodeURI(bytes calldata metadata) public virtual returns (string memory) {
         return string(metadata);
     }
 
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721, IERC165) returns (bool) {
-        return interfaceId == type(IERC4973).interfaceId || interfaceId == type(IERC4906).interfaceId
-            || super.supportsInterface(interfaceId);
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721) returns (bool) {
+        return interfaceId == type(IERC4973).interfaceId || super.supportsInterface(interfaceId);
     }
 
     function unequip(uint256 tokenId) public virtual override {
@@ -94,5 +97,12 @@ abstract contract ERC4973 is EIP712, ERC721, ERC721URIStorage, IERC4973, IERC490
     function _getHash(address active, address passive, bytes calldata metadata) internal virtual returns (bytes32) {
         bytes32 structHash = keccak256(abi.encode(AGREEMENT_HASH, active, passive, keccak256(metadata)));
         return _hashTypedDataV4(structHash);
+    }
+
+    function _baseURI() internal view override returns (string memory) {
+        if (bytes(baseURI).length > 0) {
+            return baseURI;
+        }
+        return string(abi.encodePacked("https://example/metadata/", symbol(), "/"));
     }
 }
